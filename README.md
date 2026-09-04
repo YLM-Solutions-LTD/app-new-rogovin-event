@@ -13,9 +13,9 @@ Add the hosted URL under `Security.AuthorizedApps`:
 Optional public app configuration can be supplied as a `Connections` entry named `new-rogovin-event.app`. All values are exposed to the browser:
 
 ```json
-{"locationsEndpoint":"/api/tenant-location-endpoint","categoriesEndpoint":"/api/tenant-category-endpoint","createEndpoint":"/api/Events/Create","attachmentEndpoint":"/api/tenant-attachment-endpoint/{eventId}","attachmentField":"file"}
+{"categoriesEndpoint":"/odata/EventCategory?$filter=Icon%20ne%20null","createEndpoint":"/api/Events/Create","attachmentEndpoint":"/api/tenant-attachment-endpoint/{eventId}","attachmentField":"file"}
 ```
 
-If list endpoints are not supplied, `locations` and `categories` arrays may be provided directly. Category entries require `id`, `name`, and `icon`. The app uses the host-provided `ApiAddress` and `Token`; never put credentials in Connections.
+The category endpoint defaults to the SimplyLog EventCategory OData API and only categories with an icon are shown. The first location tile comes from the host context (`LocationEntityId` and `LocationFullName`); any `Locations` or `AssignedLocations` values follow it. The app uses the host-provided `ApiAddress` and `Token`; never put credentials in Connections.
 
-Opening `index.html` outside SimplyLog shows a non-submitting preview after a short timeout.
+Opening `index.html` outside SimplyLog shows a fallback landing page; reporting is available only with valid host context.

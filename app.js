@@ -12,6 +12,22 @@
   const RTL_LANGS = ["he", "ar", "fa", "ur"];
   const appEl = document.getElementById("app");
 
+  function allowedHostOrigins() {
+    const origins = new Set(ALLOWED_HOST_ORIGINS);
+    const candidates = [document.referrer];
+    if (window.location.ancestorOrigins) candidates.push(...window.location.ancestorOrigins);
+
+    for (const candidate of candidates) {
+      try {
+        const url = new URL(candidate);
+        if (url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) {
+          origins.add(url.origin);
+        }
+      } catch (_) { /* Ignore missing or invalid browser metadata. */ }
+    }
+    return origins;
+  }
+
   function parsePayload(data) {
     if (typeof data === "string") return JSON.parse(data);
     return data && typeof data === "object" ? data : {};
@@ -20,13 +36,14 @@
   function readHostContext() {
     return new Promise((resolve) => {
       let settled = false;
+      const allowedOrigins = allowedHostOrigins();
       const finish = (value) => { if (!settled) { settled = true; window.removeEventListener("message", onMessage); resolve(value); } };
       const onMessage = (event) => {
-        if (!ALLOWED_HOST_ORIGINS.includes(event.origin)) return;
+        if (event.source !== window.parent || !allowedOrigins.has(event.origin)) return;
         try { finish(parsePayload(event.data)); } catch (_) { /* Ignore malformed untrusted messages. */ }
       };
       window.addEventListener("message", onMessage);
-      window.setTimeout(() => finish(null), 1800);
+      if (window.self === window.top) window.setTimeout(() => finish(null), 1800);
     });
   }
 

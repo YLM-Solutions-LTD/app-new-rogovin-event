@@ -19,3 +19,5 @@ Optional public app configuration can be supplied as a `Connections` entry named
 The category endpoint defaults to the SimplyLog EventCategory OData API and only categories with an icon are shown. The first location tile comes from the host context (`LocationEntityId` and `LocationFullName`); any `Locations` or `AssignedLocations` values follow it. The app uses the host-provided `ApiAddress` and `Token`; never put credentials in Connections.
 
 Opening `index.html` outside SimplyLog shows the complete form in a safe preview mode. Live locations, categories, attachments, and submission are enabled only with valid host context.
+
+When embedded, the app accepts context only from its parent window and validates the sender against the built-in SimplyLog origins or the browser-provided parent/referrer origin. It waits for that context instead of falling back to preview while the host is still loading.

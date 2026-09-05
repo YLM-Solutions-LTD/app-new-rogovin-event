@@ -22,6 +22,8 @@ The app uses only the host-provided `ApiAddress` and `Token`; credentials must n
 
 The guest listens for the documented SimplyLog message envelope (`JSON.stringify(context)` or its object equivalent), requires the exact origin derived from the iframe document referrer when available (including `https://rogovin.ylm.co.il`), otherwise uses the fixed known-origin allowlist, and always requires the parent window as the sender. It validates `ApiAddress` plus `Token.access_token` before leaving bootstrap. It keeps listening after the standalone preview timeout, so a late valid context immediately starts the authenticated state. A context received before XState starts is retained by the bridge.
 
+If an embedded load times out before receiving context, the bridge performs one namespaced `sessionStorage`-guarded iframe reload to recover a parent `load` handler that was attached too late. A second timeout settles to the normal fallback without another reload. The non-secret diagnostic state is exposed as `document.documentElement.dataset.hostContextStatus`.
+
 Opening `index.html` outside SimplyLog shows the branded Hebrew/RTL preview and makes no API requests. Live locations, categories, attachments, and submission are enabled only with a valid host context.
 
 Run the deterministic regression suite with:

@@ -18,7 +18,7 @@ function makeWindow(embedded, referrer) {
     parent: embedded ? frame : null,
     self: null,
     top: null,
-    document: { referrer: referrer || "" },
+    document: { referrer: referrer || "", documentElement: { dataset: {} } },
     setTimeout,
     clearTimeout,
     addEventListener(type, listener) {
@@ -39,6 +39,16 @@ function makeWindow(embedded, referrer) {
     dispatch(event) {
       for (const listener of listeners.get("message") || []) listener(event);
     }
+  };
+}
+
+function makeSessionStorage(initialValue) {
+  const values = new Map();
+  if (initialValue !== undefined) values.set(initialValue.key, initialValue.value);
+  return {
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) { values.set(key, String(value)); },
+    removeItem(key) { values.delete(key); }
   };
 }
 
@@ -214,6 +224,52 @@ test("known-origin allowlist is used when no referrer is available", async () =>
 
   const record = await bridge.waitForInitialContext();
   assert.equal(record.origin, "https://rogovin.ylm.co.il");
+});
+
+test("first embedded timeout reloads exactly once and records the retry status", async () => {
+  const fixture = makeWindow(true);
+  let reloads = 0;
+  fixture.window.sessionStorage = makeSessionStorage();
+  fixture.window.location = { reload() { reloads += 1; } };
+  loadScript(hostSource, fixture.window);
+  const host = fixture.window.NewRogovinEventHost;
+  const bridge = host.createHostContextBridge({ windowRef: fixture.window, timeoutMs: 5 });
+
+  assert.equal(await bridge.waitForInitialContext(), null);
+  assert.equal(reloads, 1);
+  assert.equal(fixture.window.document.documentElement.dataset.hostContextStatus, "retrying-parent-load");
+  assert.equal(fixture.window.sessionStorage.getItem(host.RETRY_STORAGE_KEY), "1");
+});
+
+test("second embedded timeout does not reload and settles to the fallback", async () => {
+  const fixture = makeWindow(true);
+  let reloads = 0;
+  const hostStorage = makeSessionStorage({ key: "new-rogovin-event:host-context-retry", value: "1" });
+  fixture.window.sessionStorage = hostStorage;
+  fixture.window.location = { reload() { reloads += 1; } };
+  loadScript(hostSource, fixture.window);
+  const host = fixture.window.NewRogovinEventHost;
+  const bridge = host.createHostContextBridge({ windowRef: fixture.window, timeoutMs: 5 });
+
+  assert.equal(await bridge.waitForInitialContext(), null);
+  assert.equal(reloads, 0);
+  assert.equal(hostStorage.getItem(host.RETRY_STORAGE_KEY), null);
+  assert.equal(fixture.window.document.documentElement.dataset.hostContextStatus, "missing-message");
+});
+
+test("accepted context clears the retry flag and records the accepted status", async () => {
+  const fixture = makeWindow(true, "https://rogovin.ylm.co.il/index.html#/App/new-event");
+  const hostStorage = makeSessionStorage({ key: "new-rogovin-event:host-context-retry", value: "1" });
+  fixture.window.sessionStorage = hostStorage;
+  loadScript(hostSource, fixture.window);
+  const host = fixture.window.NewRogovinEventHost;
+  const bridge = host.createHostContextBridge({ windowRef: fixture.window, timeoutMs: 10 });
+
+  fixture.dispatch({ source: fixture.parent, origin: "https://rogovin.ylm.co.il", data: validContext() });
+
+  assert.ok(await bridge.waitForInitialContext());
+  assert.equal(hostStorage.getItem(host.RETRY_STORAGE_KEY), null);
+  assert.equal(fixture.window.document.documentElement.dataset.hostContextStatus, "accepted");
 });
 
 test("location type falls back to a converted Type when TypeName is absent", () => {

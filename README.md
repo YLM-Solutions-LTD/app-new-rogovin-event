@@ -14,8 +14,8 @@ The app uses only the host-provided `ApiAddress` and `Token`; credentials must n
 
 - `GET /api/Categories/All` for categories.
 - `GET /api/Locations/All` only when the host context does not contain a usable `Location`.
-- `POST /api/Events` with JSON `CreateNewEventInfo` when no files are selected.
-- `POST /api/Events/CreateWithAttachments` as one multipart request when files are selected. It sends `X-SimplyLog-Async: true`, a JSON `createNewEvent` part with `application/json`, and file parts named `attachment1`, `attachment2`, and so on. The browser supplies the multipart boundary.
+- `POST /api/Events` with JSON `CreateNewEventInfo` and `X-SimplyLog-Async: true` when no files are selected. The compact numeric HTTP 201 response avoids a second read-after-create lookup.
+- `POST /api/Events/CreateWithAttachments` as one multipart request when files are selected. It sends `X-SimplyLog-Async: true`, a string `createNewEvent` form field containing the JSON payload, and file parts named `attachment1`, `attachment2`, and so on. The browser supplies the multipart boundary.
 - The async attachment endpoint may return HTTP 201 with a bare numeric JSON event ID; numeric strings and the existing `Id`/`id`/`EventId`/`eventId` object shapes are normalized as well.
 
 `CreateNewEventInfo` includes `CategoryId`, `LocationId`, `LocationType`, `Description`, `StartTime`, and reporter fields when present in the host context. The current location is normalized from `context.Location.Id`, `context.Location.FullName`/`Name`, and `context.Location.TypeName` or its converted `Type` value. Flattened location fields remain compatibility fallbacks.
@@ -25,6 +25,8 @@ The guest listens for the documented SimplyLog message envelope (`JSON.stringify
 If an embedded load times out before receiving context, the bridge performs one namespaced `sessionStorage`-guarded iframe reload to recover a parent `load` handler that was attached too late. A second timeout settles to the normal fallback without another reload. The non-secret diagnostic state is exposed as `document.documentElement.dataset.hostContextStatus`.
 
 Opening `index.html` outside SimplyLog shows the branded Hebrew/RTL preview and makes no API requests. Live locations, categories, attachments, and submission are enabled only with a valid host context.
+
+Only categories with a nonempty `Icon` field are selectable. `fa fa-*` shortcuts resolve through the local `icons.svg` sprite; HTTPS SVG URLs and sanitized inline SVG values are also supported. The main form shows at most nine locations plus an overflow button (ten boxes total), and at most 24 categories plus an overflow button (25 boxes total). Overflow opens a searchable modal instead of extending the page.
 
 Run the deterministic regression suite with:
 

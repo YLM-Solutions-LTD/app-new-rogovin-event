@@ -5,6 +5,8 @@
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
 
+  const LOCATION_TYPES = ["SiteGeoGroup", "Site", "Building", "Cell"];
+
   function normalizeId(value) {
     if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
     return value;
@@ -14,7 +16,11 @@
     if (isRecord(value)) {
       return normalizeLocationType(value.Value ?? value.value ?? value.Id ?? value.id ?? value.Name ?? value.name);
     }
-    return value == null ? "" : String(value).trim();
+    if (value == null) return "";
+    const normalized = String(value).trim();
+    if (/^\d+$/.test(normalized)) return LOCATION_TYPES[Number(normalized)] || "";
+    const known = LOCATION_TYPES.find((item) => item.toLowerCase() === normalized.toLowerCase());
+    return known || normalized;
   }
 
   function normalizeContextLocation(context) {
@@ -66,7 +72,7 @@
 
   function createAttachmentsForm(payload, files) {
     const multipart = new root.FormData();
-    multipart.append("createNewEvent", new root.Blob([JSON.stringify(payload)], { type: "application/json" }));
+    multipart.append("createNewEvent", JSON.stringify(payload));
     (Array.isArray(files) ? files : []).forEach((file, index) => multipart.append(`attachment${index + 1}`, file, file.name));
     return multipart;
   }
@@ -76,7 +82,11 @@
     const payload = buildCreateNewEventInfo(context, values.location, values);
     let result;
     if (!Array.isArray(values.files) || !values.files.length) {
-      result = await api.request("/api/Events", { method: "POST", body: payload });
+      result = await api.request("/api/Events", {
+        method: "POST",
+        headers: { "X-SimplyLog-Async": "true" },
+        body: payload
+      });
     } else {
       result = await api.request("/api/Events/CreateWithAttachments", {
         method: "POST",
@@ -89,5 +99,5 @@
     return { id: eventId };
   }
 
-  root.NewRogovinEventContract = { normalizeContextLocation, normalizeLocationType, buildCreateNewEventInfo, normalizeEventId, createAttachmentsForm, saveEvent };
+  root.NewRogovinEventContract = { LOCATION_TYPES, normalizeContextLocation, normalizeLocationType, buildCreateNewEventInfo, normalizeEventId, createAttachmentsForm, saveEvent };
 }(window));

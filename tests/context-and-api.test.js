@@ -9,6 +9,9 @@ const appSource = fs.readFileSync(path.join(appRoot, "app.js"), "utf8");
 const hostSource = fs.readFileSync(path.join(appRoot, "host-context.js"), "utf8");
 const apiSource = fs.readFileSync(path.join(appRoot, "api-client.js"), "utf8");
 const contractSource = fs.readFileSync(path.join(appRoot, "event-contract.js"), "utf8");
+const iconSource = fs.readFileSync(path.join(appRoot, "icon-resolver.js"), "utf8");
+const uiSource = fs.readFileSync(path.join(appRoot, "ui-helpers.js"), "utf8");
+const spriteSource = fs.readFileSync(path.join(appRoot, "icons.svg"), "utf8");
 const indexSource = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
 const headersSource = fs.readFileSync(path.join(appRoot, "_headers"), "utf8");
 const runtimeSource = `${appSource}\n${contractSource}`;
@@ -280,13 +283,13 @@ test("location type falls back to a converted Type when TypeName is absent", () 
   const location = fakeWindow.NewRogovinEventContract.normalizeContextLocation({
     Location: { Id: "43", Type: "3", Name: "בניין משני" }
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(location)), { id: 43, name: "בניין משני", type: "3", mine: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(location)), { id: 43, name: "בניין משני", type: "Cell", mine: true });
   const info = fakeWindow.NewRogovinEventContract.buildCreateNewEventInfo({
     Location: { Id: "43", Type: "3", Name: "בניין משני" },
     Name: "משתמש שורש",
     Email: "root@example.test"
   }, location, { categoryId: 9, description: "דיווח", startTime: "2026-09-05T00:00:00.000Z" });
-  assert.equal(info.LocationType, "3");
+  assert.equal(info.LocationType, "Cell");
   assert.equal(info.ReporterName, "משתמש שורש");
   assert.equal(info.ReporterEmail, "root@example.test");
 });
@@ -296,10 +299,7 @@ test("multipart contract uses one async request with JSON metadata and numbered 
     constructor() { this.parts = []; }
     append(name, value, filename) { this.parts.push({ name, value, filename }); }
   }
-  class FakeBlob {
-    constructor(parts, options) { this.parts = parts; this.type = options.type; }
-  }
-  const fakeWindow = { FormData: FakeFormData, Blob: FakeBlob };
+  const fakeWindow = { FormData: FakeFormData };
   loadScript(contractSource, fakeWindow);
   const payload = { LocationId: 42 };
   const form = fakeWindow.NewRogovinEventContract.createAttachmentsForm(payload, [
@@ -309,7 +309,8 @@ test("multipart contract uses one async request with JSON metadata and numbered 
 
   assert.equal(form.parts.length, 3);
   assert.equal(form.parts[0].name, "createNewEvent");
-  assert.equal(form.parts[0].value.type, "application/json");
+  assert.equal(form.parts[0].value, JSON.stringify(payload));
+  assert.equal(form.parts[0].filename, undefined);
   assert.deepEqual(form.parts.slice(1).map((part) => [part.name, part.filename]), [["attachment1", "one.jpg"], ["attachment2", "two.pdf"]]);
 });
 
@@ -380,6 +381,59 @@ test("event creation without files posts JSON CreateNewEventInfo to /api/Events"
   });
 });
 
+test("saveEvent without files requests the compact numeric 201 result", async () => {
+  const calls = [];
+  const fakeWindow = {
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => "application/json" },
+        json: async () => 103
+      };
+    }
+  };
+  loadScript(apiSource, fakeWindow);
+  loadScript(contractSource, fakeWindow);
+  const api = fakeWindow.NewRogovinEventApi.createSimplyLogClient({
+    ApiAddress: "https://api.example.test/",
+    Token: { access_token: "test-access-token" }
+  });
+  const result = await fakeWindow.NewRogovinEventContract.saveEvent(api, validContext(), {
+    location: { id: 42, type: "Building", name: "בניין מרכזי" },
+    categoryId: 9,
+    description: "דיווח",
+    files: []
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { id: 103 });
+  assert.equal(calls[0].url, "https://api.example.test/api/Events");
+  assert.equal(calls[0].options.headers["X-SimplyLog-Async"], "true");
+});
+
+test("API errors preserve the response body without putting credentials in the message", async () => {
+  const fakeWindow = {
+    fetch: async () => ({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify(["Missing category"])
+    })
+  };
+  loadScript(apiSource, fakeWindow);
+  const api = fakeWindow.NewRogovinEventApi.createSimplyLogClient({
+    ApiAddress: "https://api.example.test/",
+    Token: { access_token: "secret-test-token" }
+  });
+
+  await assert.rejects(api.request("/api/Events", { method: "POST", body: {} }), (error) => {
+    assert.equal(error.status, 400);
+    assert.deepEqual(JSON.parse(JSON.stringify(error.body)), ["Missing category"]);
+    assert.doesNotMatch(error.message, /secret-test-token/);
+    return true;
+  });
+});
+
 test("CreateWithAttachments accepts a bare numeric HTTP 201 response and returns the event result", async () => {
   class FakeFormData {
     constructor() { this.parts = []; }
@@ -435,6 +489,39 @@ test("event ID normalization accepts positive numbers, numeric strings, and obje
   assert.equal(normalize("not-an-id"), null);
 });
 
+test("compact option grids reserve the last box for the overflow button", () => {
+  const fakeWindow = {};
+  loadScript(uiSource, fakeWindow);
+  const items = Array.from({ length: 30 }, (_, index) => ({ id: index + 1, name: `Item ${index + 1}` }));
+  const locations = fakeWindow.NewRogovinEventUi.compactOptions(items, 10, 22);
+  const categories = fakeWindow.NewRogovinEventUi.compactOptions(items, 25, null);
+
+  assert.equal(locations.items.length, 9);
+  assert.equal(locations.items.at(-1).id, 22);
+  assert.equal(locations.hasMore, true);
+  assert.equal(categories.items.length, 24);
+  assert.equal(categories.hasMore, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(fakeWindow.NewRogovinEventUi.filterOptions(items, "Item 29"))).map((item) => item.id), [29]);
+});
+
+test("Font Awesome shortcuts use the local SVG sprite and SVG URLs stay image-only", () => {
+  const fakeWindow = { location: { href: "https://app.example.test/" } };
+  loadScript(iconSource, fakeWindow);
+  const icons = fakeWindow.NewRogovinEventIcons;
+
+  assert.equal(icons.faName("fa fa-wrench"), "fa-wrench");
+  assert.match(icons.renderIcon("fa fa-wrench", (value) => value), /icons\.svg\?v=5#fa-wrench/);
+  assert.equal(icons.safeSvgUrl("https://cdn.example.test/icon.svg"), "https://cdn.example.test/icon.svg");
+  assert.equal(icons.safeSvgUrl("javascript:alert(1)"), "");
+  ["fa-wrench", "fa-plug", "fa-tint", "fa-snowflake-o", "fa-trash", "fa-angle-double-up", "fa-bicycle", "fa-car", "fa-id-card"].forEach((name) => {
+    assert.match(spriteSource, new RegExp(`id=\\"${name}\\"`));
+  });
+});
+
+test("the category dataset is limited to records with a configured Icon", () => {
+  assert.match(appSource, /normalizeList\(categoryData, "category"\)\.filter\(\(category\) => String\(category\.icon/);
+});
+
 test("only source-backed routes are present in the app", () => {
   assert.match(runtimeSource, /\/api\/Categories\/All/);
   assert.match(runtimeSource, /\/api\/Locations\/All/);
@@ -451,14 +538,14 @@ test("only source-backed routes are present in the app", () => {
 });
 
 test("local assets are versioned and Cloudflare serves them without caching", () => {
-  ["app.css", "host-context.js", "api-client.js", "event-contract.js", "app.js"].forEach((asset) => {
+  ["app.css", "host-context.js", "api-client.js", "event-contract.js", "icon-resolver.js", "ui-helpers.js", "app.js"].forEach((asset) => {
     const escapedAsset = asset.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    assert.match(indexSource, new RegExp(`(?:src|href)=\\"\\./${escapedAsset}\\?v=4\\"`), `unversioned local asset: ${asset}`);
+    assert.match(indexSource, new RegExp(`(?:src|href)=\\"\\./${escapedAsset}\\?v=5\\"`), `unversioned local asset: ${asset}`);
   });
 
   const noCache = "Cache-Control: no-store, no-cache, must-revalidate, max-age=0";
   const headerBlocks = headersSource.split(/\r?\n\s*\r?\n/).map((block) => block.trim());
-  ["/", "/*.html", "/*.js", "/*.css"].forEach((pattern) => {
+  ["/", "/*.html", "/*.js", "/*.css", "/*.svg"].forEach((pattern) => {
     const block = headerBlocks.find((candidate) => candidate.startsWith(`${pattern}\n`) || candidate.startsWith(`${pattern}\r\n`));
     assert.ok(block, `missing _headers coverage for ${pattern}`);
     assert.match(block, new RegExp(noCache.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));

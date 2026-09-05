@@ -29,6 +29,13 @@
       if (!response.ok) {
         const error = new Error(`HTTP_${response.status}`);
         error.status = response.status;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            try { error.body = JSON.parse(responseText); }
+            catch (_) { error.body = responseText; }
+          }
+        } catch (_) { /* Preserve the HTTP status even when the body cannot be read. */ }
         throw error;
       }
       if (response.status === 204) return null;

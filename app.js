@@ -221,7 +221,8 @@
     if (preview) return;
 
     let selectedCategory = "";
-    const locationsById = new Map(locations.map((location) => [String(location.id), location]));
+    const locationKey = (location) => `${String(location && location.type || "")}:${String(location && (location.id ?? ""))}`;
+    const locationsByKey = new Map(locations.map((location) => [locationKey(location), location]));
     const categoriesById = new Map(categories.map((category) => [String(category.id), category]));
     let selectedLocation = locations[0] || null;
     const locationsEl = appEl.querySelector(".locations");
@@ -232,8 +233,9 @@
     let pickerKind = "";
 
     function locationButton(location) {
-      const active = selectedLocation && String(selectedLocation.id) === String(location.id);
-      return `<button class="location${active ? " selected" : ""}" type="button" data-id="${esc(location.id)}" aria-pressed="${active}"><span class="location-pin" aria-hidden="true">⌖</span><span>${esc(location.name)}</span>${location.mine ? '<small>המיקום שלי</small>' : ""}</button>`;
+      const key = locationKey(location);
+      const active = selectedLocation && locationKey(selectedLocation) === key;
+      return `<button class="location${active ? " selected" : ""}" type="button" data-key="${esc(key)}" aria-pressed="${active}"><span class="location-pin" aria-hidden="true">⌖</span><span>${esc(location.name)}</span>${location.mine ? '<small>המיקום שלי</small>' : ""}</button>`;
     }
 
     function categoryButton(category, picker) {
@@ -242,7 +244,7 @@
     }
 
     function renderLocations() {
-      const compact = compactOptions(locations, 10, selectedLocation && selectedLocation.id);
+      const compact = compactOptions(locations, 10, selectedLocation && locationKey(selectedLocation), locationKey);
       locationsEl.innerHTML = compact.items.map(locationButton).join("") + (compact.hasMore ? '<button class="location option-more" type="button" data-more="locations" aria-label="הצגת כל המיקומים"><strong>…</strong><small>כל המיקומים</small></button>' : "");
     }
 
@@ -255,7 +257,7 @@
       const source = pickerKind === "locations" ? locations : categories;
       const filtered = filterOptions(source, optionSearch.value);
       optionList.innerHTML = filtered.length
-        ? filtered.map((item) => pickerKind === "locations" ? `<button class="picker-option${selectedLocation && String(selectedLocation.id) === String(item.id) ? " selected" : ""}" type="button" data-id="${esc(item.id)}"><span class="location-pin" aria-hidden="true">⌖</span><span>${esc(item.name)}</span></button>` : categoryButton(item, true)).join("")
+        ? filtered.map((item) => pickerKind === "locations" ? `<button class="picker-option${selectedLocation && locationKey(selectedLocation) === locationKey(item) ? " selected" : ""}" type="button" data-key="${esc(locationKey(item))}"><span class="location-pin" aria-hidden="true">⌖</span><span>${esc(item.name)}</span></button>` : categoryButton(item, true)).join("")
         : '<p class="empty-options">לא נמצאו תוצאות.</p>';
     }
 
@@ -274,7 +276,7 @@
       const button = event.target.closest("button");
       if (!button) return;
       if (button.dataset.more) return openPicker("locations");
-      selectedLocation = locationsById.get(button.dataset.id) || null;
+      selectedLocation = locationsByKey.get(button.dataset.key) || null;
       renderLocations();
     });
     categoriesEl.addEventListener("click", (event) => {
@@ -286,10 +288,10 @@
     });
     optionSearch.addEventListener("input", renderPicker);
     optionList.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-id]");
+      const button = event.target.closest("button[data-id], button[data-key]");
       if (!button) return;
       if (pickerKind === "locations") {
-        selectedLocation = locationsById.get(button.dataset.id) || null;
+        selectedLocation = locationsByKey.get(button.dataset.key) || null;
         renderLocations();
       } else {
         selectedCategory = categoriesById.has(button.dataset.id) ? button.dataset.id : "";

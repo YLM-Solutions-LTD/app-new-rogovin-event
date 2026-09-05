@@ -504,6 +504,25 @@ test("compact option grids reserve the last box for the overflow button", () => 
   assert.deepEqual(JSON.parse(JSON.stringify(fakeWindow.NewRogovinEventUi.filterOptions(items, "Item 29"))).map((item) => item.id), [29]);
 });
 
+test("location selection keys combine entity type and ID", () => {
+  const fakeWindow = {};
+  loadScript(uiSource, fakeWindow);
+  const items = [
+    { id: 1, type: "Site", name: "Site 1" },
+    { id: 1, type: "Building", name: "Building 1" },
+    ...Array.from({ length: 10 }, (_, index) => ({ id: index + 2, type: "Cell", name: `Cell ${index + 2}` }))
+  ];
+  const keyOf = (item) => `${item.type}:${item.id}`;
+  const compact = fakeWindow.NewRogovinEventUi.compactOptions(items, 10, "Building:1", keyOf);
+  const compactOutside = fakeWindow.NewRogovinEventUi.compactOptions(items, 10, "Cell:11", keyOf);
+
+  assert.equal(compact.items.filter((item) => keyOf(item) === "Building:1").length, 1);
+  assert.equal(compact.items.filter((item) => item.id === 1).length, 2);
+  assert.equal(compactOutside.items.at(-1).name, "Cell 11");
+  assert.match(appSource, /locationKey = \(location\) =>/);
+  assert.doesNotMatch(appSource, /locationsById/);
+});
+
 test("Font Awesome shortcuts use the local SVG sprite and SVG URLs stay image-only", () => {
   const fakeWindow = { location: { href: "https://app.example.test/" } };
   loadScript(iconSource, fakeWindow);

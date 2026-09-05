@@ -52,7 +52,8 @@
       id: item && (item.Id ?? item.id ?? item.CategoryId ?? item.categoryId ?? item.LocationId ?? item.locationId ?? item.EntityId ?? item.entityId ?? item.Value ?? item.value),
       name: item && (item.Name || item.name || item.CategoryName || item.categoryName || item.LocationName || item.locationName || item.Title || item.title || item.FullName || item.fullName || item.LocationFullName),
       icon: item && (item.Icon || item.icon || item.IconName || item.iconName || item.IconClass || item.iconClass || ""),
-      type: item && (typeof item.TypeName === "string" && item.TypeName.trim() ? item.TypeName.trim() : normalizeLocationType(item.Type ?? item.type))
+      type: kind === "location" ? normalizeLocationType(item) : "",
+      path: item && (item.Path || item.path || item.EntityNamePath || item.entityNamePath || "")
     })).filter((item) => item.id != null && item.name);
   }
 
@@ -221,7 +222,7 @@
     if (preview) return;
 
     let selectedCategory = "";
-    const locationKey = (location) => `${String(location && location.type || "")}:${String(location && (location.id ?? ""))}`;
+    const locationKey = (location) => `${String(location && (location.type || location.path) || "unknown")}:${String(location && (location.id ?? ""))}`;
     const locationsByKey = new Map(locations.map((location) => [locationKey(location), location]));
     const categoriesById = new Map(categories.map((category) => [String(category.id), category]));
     let selectedLocation = locations[0] || null;

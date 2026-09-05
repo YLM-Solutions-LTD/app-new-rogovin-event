@@ -14,7 +14,8 @@
 
   function normalizeLocationType(value) {
     if (isRecord(value)) {
-      return normalizeLocationType(value.Value ?? value.value ?? value.Id ?? value.id ?? value.Name ?? value.name);
+      const explicit = normalizeLocationType(value.TypeName ?? value.typeName ?? value.EntityName ?? value.entityName ?? value.EntityType ?? value.entityType ?? value.Type ?? value.type);
+      return explicit || normalizeLocationTypeFromPath(value.Path ?? value.path ?? value.EntityNamePath ?? value.entityNamePath);
     }
     if (value == null) return "";
     const normalized = String(value).trim();
@@ -23,14 +24,19 @@
     return known || normalized;
   }
 
+  function normalizeLocationTypeFromPath(value) {
+    const path = String(value || "").trim();
+    if (!path) return "";
+    const leaf = path.split("/").filter(Boolean).at(-1) || "";
+    const type = leaf.split(",").at(-1) || "";
+    return normalizeLocationType(type);
+  }
+
   function normalizeContextLocation(context) {
     const runtime = isRecord(context) ? context : {};
     const source = isRecord(runtime.Location) ? runtime.Location : {};
     const id = normalizeId(source.Id ?? source.id ?? runtime.LocationId ?? runtime.LocationEntityId ?? runtime.CurrentLocationId);
-    const hasTypeName = typeof source.TypeName === "string" && source.TypeName.trim() !== "";
-    const type = hasTypeName
-      ? source.TypeName.trim()
-      : normalizeLocationType(source.Type ?? source.type ?? runtime.LocationType ?? runtime.LocationTypeId);
+    const type = normalizeLocationType(source) || normalizeLocationType(runtime.LocationType ?? runtime.LocationTypeId);
     const name = source.FullName || source.fullName || source.Name || source.name || runtime.LocationFullName || runtime.LocationName || runtime.CurrentLocationName || "המיקום שלי";
     if (id == null) return null;
     return { id, name, type, mine: true };
@@ -99,5 +105,5 @@
     return { id: eventId };
   }
 
-  root.NewRogovinEventContract = { LOCATION_TYPES, normalizeContextLocation, normalizeLocationType, buildCreateNewEventInfo, normalizeEventId, createAttachmentsForm, saveEvent };
+  root.NewRogovinEventContract = { LOCATION_TYPES, normalizeContextLocation, normalizeLocationType, normalizeLocationTypeFromPath, buildCreateNewEventInfo, normalizeEventId, createAttachmentsForm, saveEvent };
 }(window));

@@ -292,6 +292,8 @@ test("location type falls back to a converted Type when TypeName is absent", () 
   assert.equal(info.LocationType, "Cell");
   assert.equal(info.ReporterName, "משתמש שורש");
   assert.equal(info.ReporterEmail, "root@example.test");
+  assert.equal(fakeWindow.NewRogovinEventContract.normalizeLocationType({ Path: "1,Site/43,3" }), "Cell");
+  assert.equal(fakeWindow.NewRogovinEventContract.normalizeLocationType({ EntityName: "Building" }), "Building");
 });
 
 test("multipart contract uses one async request with JSON metadata and numbered attachments", () => {

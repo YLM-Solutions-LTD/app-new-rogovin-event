@@ -1,0 +1,7 @@
+{
+  "name": "new-rogovin-event",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/context-and-api.test.js"
+  }
+}

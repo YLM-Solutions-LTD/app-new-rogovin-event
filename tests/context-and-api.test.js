@@ -11,13 +11,14 @@ const apiSource = fs.readFileSync(path.join(appRoot, "api-client.js"), "utf8");
 const contractSource = fs.readFileSync(path.join(appRoot, "event-contract.js"), "utf8");
 const runtimeSource = `${appSource}\n${contractSource}`;
 
-function makeWindow(embedded) {
+function makeWindow(embedded, referrer) {
   const listeners = new Map();
   const frame = {};
   const fakeWindow = {
     parent: embedded ? frame : null,
     self: null,
     top: null,
+    document: { referrer: referrer || "" },
     setTimeout,
     clearTimeout,
     addEventListener(type, listener) {
@@ -165,6 +166,54 @@ test("invalid origin, source, and payload shape are ignored", async () => {
 
   assert.equal(await bridge.waitForInitialContext(), null);
   assert.deepEqual(received, []);
+});
+
+test("Rogovin referrer authorizes the exact parent origin", async () => {
+  const fixture = makeWindow(true, "https://rogovin.ylm.co.il/index.html#/App/new-event");
+  loadScript(hostSource, fixture.window);
+  const bridge = fixture.window.NewRogovinEventHost.createHostContextBridge({
+    windowRef: fixture.window,
+    timeoutMs: 10
+  });
+
+  fixture.dispatch({ source: fixture.parent, origin: "https://rogovin.ylm.co.il", data: validContext() });
+
+  const record = await bridge.waitForInitialContext();
+  assert.equal(record.origin, "https://rogovin.ylm.co.il");
+  assert.equal(record.context.Token.access_token, "test-access-token");
+});
+
+test("a mismatched origin is rejected when a valid referrer origin exists", async () => {
+  const fixture = makeWindow(true, "https://rogovin.ylm.co.il/index.html#/App/new-event");
+  loadScript(hostSource, fixture.window);
+  const bridge = fixture.window.NewRogovinEventHost.createHostContextBridge({ timeoutMs: 10 });
+
+  fixture.dispatch({ source: fixture.parent, origin: "https://mnt.ylm.co.il", data: validContext() });
+
+  assert.equal(await bridge.waitForInitialContext(), null);
+  assert.equal(bridge.getAcceptedContext(), null);
+});
+
+test("malformed referrer falls back to the fixed known-origin allowlist", async () => {
+  const fixture = makeWindow(true, "not a valid referrer");
+  loadScript(hostSource, fixture.window);
+  const bridge = fixture.window.NewRogovinEventHost.createHostContextBridge({ timeoutMs: 10 });
+
+  fixture.dispatch({ source: fixture.parent, origin: "https://rogovin.ylm.co.il", data: validContext() });
+
+  const record = await bridge.waitForInitialContext();
+  assert.equal(record.origin, "https://rogovin.ylm.co.il");
+});
+
+test("known-origin allowlist is used when no referrer is available", async () => {
+  const fixture = makeWindow(true);
+  loadScript(hostSource, fixture.window);
+  const bridge = fixture.window.NewRogovinEventHost.createHostContextBridge({ timeoutMs: 10 });
+
+  fixture.dispatch({ source: fixture.parent, origin: "https://rogovin.ylm.co.il", data: validContext() });
+
+  const record = await bridge.waitForInitialContext();
+  assert.equal(record.origin, "https://rogovin.ylm.co.il");
 });
 
 test("location type falls back to a converted Type when TypeName is absent", () => {

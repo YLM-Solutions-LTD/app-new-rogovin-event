@@ -3,6 +3,7 @@
 
   const DEFAULT_ALLOWED_ORIGINS = Object.freeze([
     "https://mnt.ylm.co.il",
+    "https://rogovin.ylm.co.il",
     "https://simplylog.ylm.co.il",
     "https://app.simplylog.co.il",
     "https://www.simplylog.co.il",
@@ -39,10 +40,25 @@
     return true;
   }
 
+  function resolveReferrerOrigin(windowRef, injectedReferrer) {
+    const referrer = injectedReferrer !== undefined
+      ? injectedReferrer
+      : windowRef && windowRef.document && windowRef.document.referrer;
+    if (typeof referrer !== "string" || !referrer.trim()) return null;
+    try {
+      const url = new URL(referrer.trim());
+      if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+      return url.origin;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function createHostContextBridge(options) {
     const config = options || {};
     const windowRef = config.windowRef || root;
     const allowedOrigins = new Set(config.allowedOrigins || DEFAULT_ALLOWED_ORIGINS);
+    const expectedReferrerOrigin = resolveReferrerOrigin(windowRef, config.referrer);
     const timeoutMs = Number.isFinite(config.timeoutMs) ? config.timeoutMs : 3000;
     const parentWindow = windowRef.parent;
     const embedded = parentWindow && parentWindow !== windowRef && windowRef.self !== windowRef.top;
@@ -61,7 +77,10 @@
     }
 
     function onMessage(event) {
-      if (!embedded || accepted || !event || event.source !== parentWindow || !allowedOrigins.has(event.origin)) return;
+      const originMatches = expectedReferrerOrigin
+        ? event && event.origin === expectedReferrerOrigin
+        : event && allowedOrigins.has(event.origin);
+      if (!embedded || accepted || !event || event.source !== parentWindow || !originMatches) return;
       const payload = parseMessage(event.data);
       if (!isValidContext(payload)) return;
 
@@ -97,6 +116,7 @@
   root.NewRogovinEventHost = {
     DEFAULT_ALLOWED_ORIGINS,
     isValidContext,
+    resolveReferrerOrigin,
     createHostContextBridge
   };
 }(window));

@@ -20,7 +20,7 @@ The app uses only the host-provided `ApiAddress` and `Token`; credentials must n
 
 `CreateNewEventInfo` includes `CategoryId`, `LocationId`, `LocationType`, `Description`, `StartTime`, and reporter fields when present in the host context. The current location is normalized from `context.Location.Id`, `context.Location.FullName`/`Name`, and `context.Location.TypeName` or its converted `Type` value. Flattened location fields remain compatibility fallbacks.
 
-The guest listens for the documented SimplyLog message envelope (`JSON.stringify(context)` or its object equivalent), requires an exact approved origin and the parent window as the sender, and validates `ApiAddress` plus `Token.access_token` before leaving bootstrap. It keeps listening after the standalone preview timeout, so a late valid context immediately starts the authenticated state. A context received before XState starts is retained by the bridge.
+The guest listens for the documented SimplyLog message envelope (`JSON.stringify(context)` or its object equivalent), requires the exact origin derived from the iframe document referrer when available (including `https://rogovin.ylm.co.il`), otherwise uses the fixed known-origin allowlist, and always requires the parent window as the sender. It validates `ApiAddress` plus `Token.access_token` before leaving bootstrap. It keeps listening after the standalone preview timeout, so a late valid context immediately starts the authenticated state. A context received before XState starts is retained by the bridge.
 
 Opening `index.html` outside SimplyLog shows the branded Hebrew/RTL preview and makes no API requests. Live locations, categories, attachments, and submission are enabled only with a valid host context.
 

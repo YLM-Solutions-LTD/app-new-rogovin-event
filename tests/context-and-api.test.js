@@ -9,6 +9,8 @@ const appSource = fs.readFileSync(path.join(appRoot, "app.js"), "utf8");
 const hostSource = fs.readFileSync(path.join(appRoot, "host-context.js"), "utf8");
 const apiSource = fs.readFileSync(path.join(appRoot, "api-client.js"), "utf8");
 const contractSource = fs.readFileSync(path.join(appRoot, "event-contract.js"), "utf8");
+const indexSource = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
+const headersSource = fs.readFileSync(path.join(appRoot, "_headers"), "utf8");
 const runtimeSource = `${appSource}\n${contractSource}`;
 
 function makeWindow(embedded, referrer) {
@@ -446,4 +448,19 @@ test("only source-backed routes are present in the app", () => {
   ];
   obsoleteRoutes.forEach((route) => assert.equal(runtimeSource.includes(route), false, `obsolete route found: ${route}`));
   assert.doesNotMatch(runtimeSource, /od["']?ata/i);
+});
+
+test("local assets are versioned and Cloudflare serves them without caching", () => {
+  ["app.css", "host-context.js", "api-client.js", "event-contract.js", "app.js"].forEach((asset) => {
+    const escapedAsset = asset.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(indexSource, new RegExp(`(?:src|href)=\\"\\./${escapedAsset}\\?v=4\\"`), `unversioned local asset: ${asset}`);
+  });
+
+  const noCache = "Cache-Control: no-store, no-cache, must-revalidate, max-age=0";
+  const headerBlocks = headersSource.split(/\r?\n\s*\r?\n/).map((block) => block.trim());
+  ["/", "/*.html", "/*.js", "/*.css"].forEach((pattern) => {
+    const block = headerBlocks.find((candidate) => candidate.startsWith(`${pattern}\n`) || candidate.startsWith(`${pattern}\r\n`));
+    assert.ok(block, `missing _headers coverage for ${pattern}`);
+    assert.match(block, new RegExp(noCache.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  });
 });
